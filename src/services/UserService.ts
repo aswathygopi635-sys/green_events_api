@@ -1,6 +1,7 @@
 import { UserRepository } from '../repositories/UserRepository';
 import { CreateUserDTO, UpdateUserDTO } from '../types';
 import { User } from '../entities/User.entity';
+import bcrypt from 'bcryptjs';
 
 export class UserService {
   private userRepository: UserRepository;
@@ -9,8 +10,10 @@ export class UserService {
     this.userRepository = new UserRepository();
   }
 
-  async getAllUsers(): Promise<User[]> {
-    return this.userRepository.findAll();
+  async getAllUsers(): Promise<Omit<User, 'password'>[]> {
+    const users = await this.userRepository.findAll();
+    // remove password before returning
+    return users.map(({ password, ...rest }) => rest);
   }
 
   async getUserById(id: string): Promise<User> {
@@ -26,7 +29,15 @@ export class UserService {
     if (existingUser) {
       throw { message: 'Email already exists', statusCode: 400 };
     }
-    return this.userRepository.create(userData);
+    // Hash the password before creating the user
+    const saltRounds = 10;
+    const hashedPassword = await bcrypt.hash(userData.password, saltRounds);
+    const userToCreate: Partial<User> = {
+      ...userData,
+      password: hashedPassword,
+    };
+
+    return this.userRepository.create(userToCreate);
   }
 
   async updateUser(id: string, userData: UpdateUserDTO): Promise<User> {
